@@ -1,0 +1,40 @@
+{
+  "project": {
+    "name": "Student Multi-Source Data Pipeline",
+    "version": "1.0.0"
+  },
+  "sources": {
+    "csv": {
+      "path": "data/raw/students.csv"
+    },
+    "api": {
+      "url": "https://YOUR-DEPLOYED-API.example.com/students",
+      "timeout_seconds": 15,
+      "max_retries": 3,
+      "backoff_seconds": 1.0
+    },
+    "database": {
+      "path": "database/students.db"
+    }
+  },
+  "output": {
+    "final_dataset": "data/processed/final_dataset.csv",
+    "student_ml_dataset": "data/processed/student_ml_dataset.csv",
+    "rejected_records": "data/rejected/rejected_records.csv",
+    "metrics_report": "reports/pipeline_metrics.json",
+    "run_report": "reports/pipeline_run.md",
+    "log_file": "logs/pipeline.log",
+    "api_raw_snapshot": "data/raw/students_api_raw.json",
+    "database_raw_snapshot": "data/raw/enrollments_raw.csv"
+  },
+  "processing": {
+    "default_mode": "incremental",
+    "missing_value_strategy": {
+      "age": "median",
+      "gpa": "median",
+      "attendance": "median",
+      "score": "median"
+    },
+    "minimum_attendance_good": 75
+  }
+}

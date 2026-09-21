@@ -1,0 +1,37 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime state/cache
+state/*.json
+state/cache/
+
+# Logs and generated reports
+logs/*.log
+reports/*.json
+reports/*.md
+
+# Generated datasets
+# Keep required output files out of Git; source CSV remains tracked.
+data/processed/*.csv
+data/rejected/*.csv
+data/raw/*.json
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Local database - generated from seed SQL/data
+database/*.db
