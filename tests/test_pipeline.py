@@ -213,6 +213,10 @@ def test_full_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
     assert metrics.integrated_records == 2
     assert metrics.valid_records == 2
     assert metrics.rejected_records == 0
+    assert metrics.source_records_total == 6
+    assert metrics.source_rejected_records == 0
+    assert metrics.integration_rejected_records == 0
+    assert metrics.valid_final_records == 2
     assert metrics.missing_values_handled == 1
 
     # ------------------------------------------------------------------

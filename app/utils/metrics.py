@@ -9,6 +9,9 @@ from typing import Any
 
 @dataclass
 class PipelineMetrics:
+    # ------------------------------------------------------------------
+    # Core pipeline metrics
+    # ------------------------------------------------------------------
     total_records: int = 0
     valid_records: int = 0
     rejected_records: int = 0
@@ -17,11 +20,31 @@ class PipelineMetrics:
     invalid_records: int = 0
     integrated_records: int = 0
     cross_source_mismatches: int = 0
+
+    # ------------------------------------------------------------------
+    # Clearer semantic metrics
+    # ------------------------------------------------------------------
+    source_records_total: int = 0
+    source_rejected_records: int = 0
+    integration_rejected_records: int = 0
+    valid_final_records: int = 0
+
+    # ------------------------------------------------------------------
+    # Detailed metrics
+    # ------------------------------------------------------------------
     source_records: dict[str, int] = field(default_factory=dict)
     rejected_by_source: dict[str, int] = field(default_factory=dict)
     rejection_reasons: dict[str, int] = field(default_factory=dict)
+
+    # ------------------------------------------------------------------
+    # Pipeline outputs and lineage
+    # ------------------------------------------------------------------
     outputs: dict[str, str] = field(default_factory=dict)
     source_hashes: dict[str, str] = field(default_factory=dict)
+
+    # ------------------------------------------------------------------
+    # Processing information
+    # ------------------------------------------------------------------
     processing_mode: str = "full"
     cache_hits: int = 0
     cache_misses: int = 0
@@ -31,16 +54,30 @@ class PipelineMetrics:
         return perf_counter()
 
     def stop_timer(self, started_at: float) -> None:
-        self.duration_seconds = round(perf_counter() - started_at, 4)
+        self.duration_seconds = round(
+            perf_counter() - started_at,
+            4,
+        )
 
-    def add_rejection(self, source: str, reason: str) -> None:
+    def add_rejection(
+        self,
+        source: str,
+        reason: str,
+    ) -> None:
         self.rejected_records += 1
         self.invalid_records += 1
-        self.rejected_by_source[source] = self.rejected_by_source.get(source, 0) + 1
-        self.rejection_reasons[reason] = self.rejection_reasons.get(reason, 0) + 1
+
+        self.rejected_by_source[source] = (
+            self.rejected_by_source.get(source, 0) + 1
+        )
+
+        self.rejection_reasons[reason] = (
+            self.rejection_reasons.get(reason, 0) + 1
+        )
 
     def as_dict(self) -> dict[str, Any]:
         return {
+            # Existing metrics
             "total_records": self.total_records,
             "valid_records": self.valid_records,
             "rejected_records": self.rejected_records,
@@ -49,11 +86,23 @@ class PipelineMetrics:
             "invalid_records": self.invalid_records,
             "integrated_records": self.integrated_records,
             "cross_source_mismatches": self.cross_source_mismatches,
+
+            # Clear semantic metrics
+            "source_records_total": self.source_records_total,
+            "source_rejected_records": self.source_rejected_records,
+            "integration_rejected_records": self.integration_rejected_records,
+            "valid_final_records": self.valid_final_records,
+
+            # Detailed metrics
             "source_records": self.source_records,
             "rejected_by_source": self.rejected_by_source,
             "rejection_reasons": self.rejection_reasons,
+
+            # Outputs / lineage
             "outputs": self.outputs,
             "source_hashes": self.source_hashes,
+
+            # Processing information
             "processing_mode": self.processing_mode,
             "cache_hits": self.cache_hits,
             "cache_misses": self.cache_misses,
@@ -61,9 +110,20 @@ class PipelineMetrics:
         }
 
 
-def save_metrics(metrics: PipelineMetrics, output_file: Path) -> None:
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+def save_metrics(
+    metrics: PipelineMetrics,
+    output_file: Path,
+) -> None:
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
     output_file.write_text(
-        json.dumps(metrics.as_dict(), indent=2, ensure_ascii=False),
+        json.dumps(
+            metrics.as_dict(),
+            indent=2,
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
