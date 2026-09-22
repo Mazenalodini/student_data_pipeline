@@ -1,82 +1,316 @@
-# Doctor Demo Checklist
+# Demo Checklist — Student Multi-Source Data Pipeline
 
-## 1. Show the three sources
+هذا الملف مخصص للعرض أمام الدكتور خطوة بخطوة بدون التنقل العشوائي بين أجزاء المشروع.
 
-- `data/raw/students.csv`
-- the deployed online REST endpoint and its `/docs`
-- `database/students.db` with `courses` and `enrollments`
+---
 
-## 2. Show the architecture
+## 1. ابدأ بفكرة المشروع
 
-Open `README.md` and explain:
+افتح `README.md` وابدأ بشرح الفكرة:
 
-`CSV + API + SQLite → Extract → Validate → Clean → Integrate → Transform → Final Validation → Load`
+```text
+CSV + REST API + SQLite
+        ↓
+Extract → Validate → Clean → Integrate → Transform
+        ↓
+Final Validation → Load
+```
 
-## 3. Run a full refresh
+الجملة الأساسية في العرض:
+
+> المشروع يجمع بيانات من ثلاثة مصادر مختلفة، يتحقق من جودتها، ينظفها، يدمجها باستخدام `student_id`، ثم ينتج Dataset نهائية قابلة للتحليل وMachine Learning مع الاحتفاظ بالسجلات المرفوضة وأسبابها.
+
+---
+
+## 2. اعرض مصادر البيانات الثلاثة
+
+### CSV
+
+افتح:
+
+```text
+data/raw/students.csv
+```
+
+ووضح أنه يحتوي على البيانات الأساسية للطلاب.
+
+### REST API
+
+افتح المتصفح على:
+
+```text
+https://student-academic-profile-api.vercel.app/docs
+```
+
+ثم اعرض:
+
+```text
+GET /health
+GET /students
+GET /students/{student_id}
+```
+
+### SQLite
+
+افتح:
+
+```text
+database/students.db
+```
+
+واشرح جدولَي:
+
+```text
+courses
+enrollments
+```
+
+---
+
+## 3. اعرض الهيكل
+
+في VS Code افتح:
+
+```text
+app/
+data/
+database/
+tests/
+docs/
+api_service/
+main.py
+config.json
+```
+
+اشرح أن `app/sources/` يعزل كل مصدر عن الآخر، وأن `app/pipeline.py` مسؤول عن orchestration.
+
+---
+
+## 4. اعرض SQL
+
+افتح:
+
+```text
+docs/DATA_AND_SQL.md
+```
+
+ثم:
+
+```text
+database/schema.sql
+app/sources/database_source.py
+```
+
+وضح أن SQLite لا تتم قراءته مباشرة كملف، بل يتم تنفيذ SQL `INNER JOIN` لاستخراج بيانات التسجيل مع معلومات المقرر.
+
+---
+
+## 5. شغّل Full Processing
+
+نفّذ في Terminal:
 
 ```powershell
 python main.py --mode full
 ```
 
-## 4. Explain Data Quality
+ثم وضح المراحل الظاهرة في الـlog:
 
-Open:
+```text
+REST API extraction
+CSV extraction
+SQLite extraction
+Data integration
+Transformation
+Final validation
+Final dataset creation
+Rejected records writing
+Pipeline completed successfully
+```
+
+---
+
+## 6. اعرض Data Quality
+
+افتح:
 
 ```text
 data/rejected/rejected_records.csv
 ```
 
-Show invalid Age, invalid GPA, invalid Attendance, invalid Score, duplicate records, and cross-source mismatches.
+أظهر أمثلة مثل:
 
-## 5. Show the final integrated dataset
+```text
+Invalid Age
+Invalid GPA
+Invalid Score
+Missing student_id
+Duplicate record
+student_id not found in CSV source
+Student missing from REST API source
+```
 
-Open:
+ثم اشرح أن السجل غير الصالح لا يختفي بصمت؛ بل يسجل مصدره وسبب رفضه وتمثيله الخام.
+
+---
+
+## 7. اعرض Final Dataset
+
+افتح:
 
 ```text
 data/processed/final_dataset.csv
 ```
 
-Point out the merged columns and derived features:
+وضح أن الـgrain هو:
 
-- `performance_level`
-- `attendance_status`
-- `score_band`
-- `source`
+```text
+One Row per Student × Course × Semester
+```
 
-## 6. Show the ML-oriented dataset
+وأظهر الـfeatures المشتقة:
 
-Open:
+```text
+performance_level
+attendance_status
+score_band
+source
+```
+
+---
+
+## 8. اعرض ML Dataset
+
+افتح:
 
 ```text
 data/processed/student_ml_dataset.csv
 ```
 
-Explain that it provides one row per student with aggregate course features.
-
-## 7. Show observability
-
-Open:
+وضح أنه:
 
 ```text
-reports/pipeline_metrics.json
-reports/pipeline_run.md
-logs/pipeline.log
+One Row per Student
 ```
 
-Explain source counts, rejected counts, duplicates, missing values, processing time, and source hashes.
+ويحتوي على Features تجميعية مثل:
 
-## 8. Demonstrate incremental processing
+```text
+course_count
+total_credit_hours
+average_score
+highest_score
+lowest_score
+```
 
-Run:
+---
+
+## 9. اعرض Logging وMetrics
+
+افتح:
+
+```text
+logs/pipeline.log
+reports/pipeline_metrics.json
+reports/pipeline_run.md
+```
+
+وضح أن المشروع لا يكتفي بإنتاج Dataset، بل يسجل execution history وsource counts وrejections وprocessing time وhashes وcache information.
+
+---
+
+## 10. أثبت Incremental Processing
+
+بدون تعديل المصادر، نفذ مرة أخرى:
 
 ```powershell
 python main.py
 ```
 
-again without modifying the sources. Explain that local source hashes and the remote API payload hash allow the pipeline to reuse validated source results.
+ثم وضح:
 
-## 9. Run tests
+```text
+default_mode = incremental
+```
+
+وأن النظام يستخدم source fingerprints وvalidated caches لإعادة استخدام النتائج عندما لا تتغير المصادر.
+
+---
+
+## 11. شغّل الاختبارات
+
+نفّذ:
 
 ```powershell
-pytest -q
+python -m pytest -q
+```
+
+والنتيجة المستهدفة في النسخة الحالية:
+
+```text
+9 passed
+```
+
+---
+
+## 12. إذا سأل الدكتور: لماذا `student_id` يتكرر؟
+
+الإجابة:
+
+> لأن `final_dataset.csv` ليست Student Table فقط؛ بل تمثل مستوى `Student × Course × Semester`. الطالب الواحد يمكن أن يكون لديه عدة تسجيلات مقررات، لذلك تكرار `student_id` طبيعي في هذا الـgrain. أما `student_ml_dataset.csv` فهي One Row per Student.
+
+---
+
+## 13. إذا سأل الدكتور: لماذا لا نعدل Invalid Values بدل رفضها؟
+
+الإجابة:
+
+> لأن تعديل قيمة غير صالحة دون دليل قد يغيّر الحقيقة الأصلية للبيانات. لذلك المشروع يرفض السجل ويسجل السبب في `rejected_records.csv`، بينما يستخدم Median فقط للقيم الرقمية المفقودة التي تسمح بها الاستراتيجية المحددة في الإعدادات.
+
+---
+
+## 14. إذا سأل الدكتور: كيف تضيف Source جديدًا؟
+
+الإجابة:
+
+> أضيف Source Adapter جديد داخل `app/sources/` ليحول المصدر إلى Contract موحد، ثم يمكن إعادة استخدام طبقات Validation وCleaning وIntegration وTransformation وOutput دون إعادة كتابة المشروع بالكامل.
+
+---
+
+## 15. آخر فحص قبل التسليم
+
+نفّذ بالترتيب:
+
+```powershell
+python -m pytest -q
+python main.py --mode full
+python main.py
+```
+
+ثم تأكد من وجود:
+
+```text
+data/processed/final_dataset.csv
+data/processed/student_ml_dataset.csv
+data/rejected/rejected_records.csv
+reports/pipeline_metrics.json
+reports/pipeline_run.md
+logs/pipeline.log
+data/raw/students_api_raw.json
+data/raw/enrollments_raw.csv
+```
+
+وأخذ Screenshots لكل مرحلة مطلوبة في التكليف:
+
+```text
+Terminal / commands
+CSV source
+REST API /docs
+SQLite
+Pipeline execution
+Rejected records
+Final dataset
+Metrics
+Logs
+Tests
+Incremental run
 ```

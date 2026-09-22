@@ -1,48 +1,100 @@
 # Student Multi-Source Data Pipeline
 
-A professional Python Data Engineering project that extracts student data from three independent sources — CSV, an online REST API, and SQLite — then validates, cleans, integrates, transforms, quality-checks, and loads reusable analytical datasets.
+## نظرة عامة
 
-## Why this project exists
+هذا المشروع عبارة عن **Data Engineering Pipeline** مبني بلغة Python لمعالجة بيانات الطلاب القادمة من ثلاثة مصادر مختلفة:
 
-This project implements the comprehensive practical assignment:
+- **CSV File**: بيانات الهوية والبيانات الأساسية للطلاب.
+- **Online REST API**: البيانات الأكاديمية مثل GPA والحضور والحالة.
+- **SQLite Database**: بيانات المقررات والتسجيلات والدرجات.
 
-`CSV + REST API + SQLite -> Extract -> Validate -> Clean -> Integrate -> Transform -> Final Validation -> Load`
+يمر كل مصدر عبر خط معالجة موحد:
 
-The required output is `data/processed/final_dataset.csv`; invalid records are routed to `data/rejected/rejected_records.csv`.
+```text
+Extract
+  ↓
+Validate
+  ↓
+Clean
+  ↓
+Integrate
+  ↓
+Transform
+  ↓
+Final Validation
+  ↓
+Load
+```
+
+النتيجة الأساسية هي Dataset موحدة جاهزة للتحليل وMachine Learning، مع فصل السجلات غير الصالحة في ملف مستقل مع سبب الرفض.
+
+---
+
+## أهداف المشروع
+
+يطبق المشروع عمليًا مفاهيم Data Engineering المطلوبة في التكليف، مع التركيز على:
+
+- التعامل مع **Multi-Source Data**.
+- فصل مسؤوليات مصادر البيانات عن منطق المعالجة.
+- تطبيق **Data Validation** قبل وبعد الدمج.
+- معالجة Missing Values وDuplicates وInvalid Values.
+- دمج المصادر باستخدام `student_id` كمفتاح أعمال مشترك.
+- إنشاء Features مشتقة قابلة للاستخدام في التحليل وML.
+- الاحتفاظ بالسجلات المرفوضة مع سبب الرفض.
+- توفير Logging وMetrics وData Lineage.
+- دعم **Full Processing** و**Incremental Processing**.
+
+---
 
 ## Architecture
 
 ```text
-                         MULTI-SOURCE DATA
-                ┌────────────┬────────────┐
-                │            │            │
-               CSV      ONLINE REST     SQLITE
-                │            │            │
-                └────────────┼────────────┘
-                             ▼
-                         EXTRACTION
-                             ▼
-                    SOURCE VALIDATION
-                             ▼
-                           CLEAN
-                             ▼
-                         INTEGRATION
-                             ▼
-                       TRANSFORMATION
-                             ▼
-                      FINAL VALIDATION
-                         /         \
+                         DATA SOURCES
+            ┌────────────────┼────────────────┐
+            │                │                │
+           CSV          REST API           SQLite
+            │                │                │
+            └────────────────┼────────────────┘
+                             ↓
+                         Extraction
+                             ↓
+                    Source Validation
+                             ↓
+                           Cleaning
+                             ↓
+                         Integration
+                             ↓
+                        Transformation
+                             ↓
+                      Final Validation
                         /           \
-               VALID RECORDS     INVALID RECORDS
-                     │                  │
-                     ▼                  ▼
-          final_dataset.csv     rejected_records.csv
-                     │
-                     ▼
-             ML / BI / ANALYSIS
+                       /             \
+              Valid Records      Rejected Records
+                    │                  │
+                    ↓                  ↓
+          final_dataset.csv   rejected_records.csv
+                    │
+                    ↓
+              ML / BI / Analysis
 ```
 
-## Project structure
+### مسؤوليات الطبقات
+
+| الطبقة | المسؤولية |
+|---|---|
+| `app/sources/` | استخراج كل مصدر ومعالجة قواعده الخاصة والتحقق الأولي |
+| `app/transformation/cleaner.py` | تنظيف النصوص ومعالجة Missing Values |
+| `app/transformation/integration.py` | دمج CSV + REST API + SQLite |
+| `app/transformation/transformer.py` | Features مشتقة وDataset موجهة لـML |
+| `app/validation/quality.py` | التحقق النهائي من جودة Dataset |
+| `app/output/` | كتابة Final Dataset وRejected Records والـJSON outputs |
+| `app/utils/` | Logging وMetrics وHashing |
+| `app/pipeline.py` | Orchestration وتنفيذ دورة الـPipeline |
+| `main.py` | CLI Entry Point فقط |
+
+---
+
+## Project Structure
 
 ```text
 student_data_pipeline/
@@ -71,176 +123,400 @@ student_data_pipeline/
 │   ├── data/students_api.json
 │   ├── Dockerfile
 │   ├── render.yaml
-│   ├── README.md
 │   └── requirements.txt
 ├── data/
-│   ├── raw/students.csv
+│   ├── raw/
 │   ├── processed/
 │   └── rejected/
 ├── database/
+│   ├── schema.sql
+│   └── students.db
+├── docs/
 ├── logs/
 ├── reports/
 ├── state/
-├── scripts/setup_database.py
+├── scripts/
+│   └── setup_database.py
 ├── tests/
 ├── config.json
 ├── main.py
 └── requirements.txt
 ```
 
-## Data sources
+---
 
-### 1. CSV
+## Data Sources
 
-`data/raw/students.csv`
+### 1. CSV Source
 
-Student identity/demographic data:
+الملف:
 
-- `student_id`
-- `student_name`
-- `age`
-- `major`
-- `city`
+```text
+data/raw/students.csv
+```
 
-The file intentionally contains realistic data-quality problems required by the assignment.
+الحقول الأساسية:
+
+```text
+student_id
+student_name
+age
+major
+city
+```
+
+يستخدم هذا المصدر لاختبار قواعد Data Quality، بما في ذلك Missing Values وDuplicates وInvalid Values وتباين النصوص.
 
 ### 2. Online REST API
 
-The pipeline consumes a public HTTPS endpoint with the contract:
+المصدر المنشور حاليًا:
+
+```text
+https://student-academic-profile-api.vercel.app/students
+```
+
+الـAPI يوفر بيانات أكاديمية بهذا الشكل:
 
 ```json
-[
-  {
-    "student_id": 1001,
-    "gpa": 3.45,
-    "attendance": 92,
-    "status": "Active"
-  }
-]
-```
-
-The API implementation is under `api_service/` and is designed to be deployed to a cloud platform such as Render or Railway. The pipeline reads its URL from `config.json` or `STUDENT_PIPELINE_API_URL`.
-
-> The repository is deployment-ready. A public HTTPS URL still requires deploying `api_service/` to a cloud account and then configuring that URL in `config.json` or the environment variable.
-
-### 3. SQLite
-
-`database/students.db` contains:
-
-- `courses`
-- `enrollments`
-
-The extraction uses SQL JOINs to produce course-enrollment records.
-
-## Data quality rules
-
-The pipeline enforces the assignment rules:
-
-| Field | Rule |
-|---|---|
-| `student_id` | required and unique within a source |
-| `age` | 16–80 |
-| `gpa` | 0–4 |
-| `attendance` | 0–100 |
-| `score` | 0–100 |
-| text fields | trimmed and normalized |
-
-Missing numeric values are imputed using the configured median strategy. Invalid range values are rejected rather than silently corrected. Duplicate records are rejected, and cross-source incompatibilities are recorded as rejected records.
-
-## Rejected records
-
-`data/rejected/rejected_records.csv` contains:
-
-- source
-- record_type
-- student_id
-- error_reason
-- raw_record
-- detected_at
-
-This preserves traceability instead of silently discarding bad data.
-
-## Transformations
-
-The final integrated dataset contains the original attributes plus derived features:
-
-- `performance_level`
-- `attendance_status`
-- `score_band`
-- `source`
-
-`source` provides basic Data Lineage by showing that the final row is composed from `CSV+API+DATABASE`.
-
-An additional student-level feature dataset is generated at:
-
-`data/processed/student_ml_dataset.csv`
-
-It aggregates course activity into:
-
-- course count
-- total credit hours
-- average score
-- highest score
-- lowest score
-
-## Configuration
-
-`config.json` keeps paths, API URL, retry settings, output locations, and processing rules outside the business logic.
-
-For deployment, prefer an environment variable instead of hardcoding a production URL:
-
-```powershell
-$env:STUDENT_PIPELINE_API_URL="https://YOUR-DEPLOYED-API.example.com/students"
-```
-
-## Setup
-
-Recommended Python versions: 3.11–3.13.
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python scripts\setup_database.py
-```
-
-## Configure the online API
-
-Update `config.json`:
-
-```json
-"api": {
-  "url": "https://YOUR-DEPLOYED-API.example.com/students",
-  "timeout_seconds": 15
+{
+  "student_id": 1001,
+  "gpa": 3.7,
+  "attendance": 94,
+  "status": "Active"
 }
 ```
 
-or set:
+نقطة الصحة:
 
-```powershell
-$env:STUDENT_PIPELINE_API_URL="https://YOUR-DEPLOYED-API.example.com/students"
+```text
+/health
 ```
 
-## Run
+وواجهة التوثيق:
 
-Full refresh:
+```text
+/docs
+```
+
+نقطة جلب الطلاب هي:
+
+```text
+/students
+```
+
+يقرأ الـPipeline عنوان الـAPI من `config.json`، مع إمكانية تجاوزه بواسطة متغير البيئة `STUDENT_PIPELINE_API_URL`.
+
+### 3. SQLite Source
+
+قاعدة البيانات:
+
+```text
+database/students.db
+```
+
+الجداول الرئيسية:
+
+```text
+courses
+enrollments
+```
+
+ويتم استخراج معلومات التسجيل والمقرر باستخدام SQL `JOIN`.
+
+---
+
+## Data Quality Rules
+
+| الحقل | قاعدة التحقق |
+|---|---|
+| `student_id` | Required وUnique داخل المصدر |
+| `age` | من 16 إلى 80 |
+| `gpa` | من 0 إلى 4 |
+| `attendance` | من 0 إلى 100 |
+| `score` | من 0 إلى 100 |
+| Text fields | Trim + Normalization |
+
+### Missing Values
+
+تتم معالجة القيم الرقمية المفقودة وفق الاستراتيجية الموجودة في `config.json`، وحاليًا تعتمد على **Median** للحقول الرقمية المحددة.
+
+### Invalid Values
+
+القيم التي تخالف حدود الجودة لا يتم تصحيحها بشكل صامت. يتم رفض السجل وتسجيل السبب في:
+
+```text
+data/rejected/rejected_records.csv
+```
+
+### Duplicate Records
+
+يتم اكتشاف التكرارات على مستوى المصدر، ويتم رفض التكرار مع الإبقاء على السجل المقبول الأساسي.
+
+---
+
+## Integration
+
+المفتاح المشترك بين المصادر هو:
+
+```text
+student_id
+```
+
+مصدر CSV يوفر بيانات الطالب الأساسية، وREST API يوفر الملف الأكاديمي، وSQLite يوفر حقائق التسجيل بالمقرر.
+
+الـFinal Dataset يحتفظ بمستوى تفصيل **Student × Course × Semester**؛ لذلك قد يظهر `student_id` أكثر من مرة عندما يكون الطالب مسجلًا في أكثر من مقرر أو فصل.
+
+تم أيضًا إنشاء Dataset ثانية بمستوى **One Row Per Student** لأغراض ML والتحليل.
+
+---
+
+## Transformations
+
+ينتج المشروع Features مشتقة، من أهمها:
+
+### `performance_level`
+
+```text
+GPA >= 3.5 → Excellent
+GPA >= 3.0 → Very Good
+GPA >= 2.5 → Good
+GPA >= 2.0 → Acceptable
+GPA < 2.0  → At Risk
+```
+
+### `attendance_status`
+
+```text
+Attendance >= 75 → Good
+Attendance < 75  → Low
+```
+
+### `score_band`
+
+```text
+90–100 → A
+80–89  → B
+70–79  → C
+60–69  → D
+0–59   → F
+```
+
+### `source`
+
+```text
+CSV+API+DATABASE
+```
+
+يستخدم هذا الحقل كجزء من **Data Lineage** لتوضيح مصادر البيانات التي ساهمت في بناء السجل النهائي.
+
+---
+
+## Rejected Records
+
+الملف:
+
+```text
+data/rejected/rejected_records.csv
+```
+
+ويحتوي على معلومات مثل:
+
+```text
+source
+record_type
+student_id
+error_reason
+raw_record
+detected_at
+```
+
+وبالتالي لا يتم إسقاط السجل غير الصالح دون تفسير؛ بل يبقى قابلًا للمراجعة والتتبع.
+
+---
+
+## Raw Data and Traceability
+
+يحافظ المشروع على Raw snapshots للمصادر المهمة:
+
+```text
+data/raw/students.csv
+data/raw/students_api_raw.json
+data/raw/enrollments_raw.csv
+```
+
+ويتم استخدام SHA-256 fingerprints لتتبع حالة المصادر ودعم Incremental Processing.
+
+---
+
+## Incremental Processing
+
+يدعم المشروع نمطين للتشغيل:
+
+### Full Processing
+
+يعيد بناء النتائج من المصادر من البداية:
 
 ```powershell
 python main.py --mode full
 ```
 
-Incremental mode:
+### Incremental Processing
+
+يستخدم fingerprints وvalidated caches لإعادة استخدام نتائج المصادر التي لم تتغير.
+
+التشغيل الافتراضي:
 
 ```powershell
 python main.py
 ```
 
-The default is the configured incremental mode. If no source fingerprint has changed and outputs already exist, the pipeline reuses the current results.
+قبل إعادة الاستخدام، يتم فحص الـREST API لأن الـpayload قد يتغير حتى لو لم يتغير عنوان الـendpoint.
+
+---
+
+## Configuration
+
+جميع الإعدادات المهمة موجودة خارج منطق الـPipeline في:
+
+```text
+config.json
+```
+
+ويتضمن ذلك:
+
+- API URL
+- timeout
+- retries
+- backoff
+- database path
+- output paths
+- missing-value strategies
+- default processing mode
+- attendance threshold
+
+يمكن تجاوز عنوان الـAPI من البيئة:
+
+```powershell
+$env:STUDENT_PIPELINE_API_URL="https://example.com/students"
+```
+
+ويُفضّل استخدام environment variable عندما يكون عنوان الخدمة مختلفًا بين البيئات.
+
+---
+
+## Pipeline Metrics
+
+يولد المشروع تقرير Metrics في:
+
+```text
+reports/pipeline_metrics.json
+```
+
+ويشمل:
+
+- source record counts
+- integrated records
+- valid final records
+- rejected records
+- duplicate records
+- missing values handled
+- rejection reasons
+- source fingerprints
+- cache hits / misses
+- processing time
+
+كما يتم إنشاء تقرير تشغيلي في:
+
+```text
+reports/pipeline_run.md
+```
+
+---
+
+## Logging
+
+يتم تسجيل التنفيذ في:
+
+```text
+logs/pipeline.log
+```
+
+ويتضمن مراحل التشغيل والأخطاء وحالة المصادر ونتيجة الـPipeline.
+
+---
+
+## Installation
+
+المشروع يستخدم Python ولا يحتاج إلى مكتبات خارجية لتشغيل خدمة الـAPI المحلية أو الـPipeline باستثناء الحزم الموجودة في `requirements.txt`.
+
+إنشاء البيئة:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+تثبيت الاعتماديات:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+إنشاء/إعادة بناء قاعدة SQLite:
+
+```powershell
+python scripts\setup_database.py
+```
+
+---
+
+## Running the Pipeline
+
+Full run:
+
+```powershell
+python main.py --mode full
+```
+
+Incremental run:
+
+```powershell
+python main.py
+```
+
+---
+
+## Tests
+
+تشغيل الاختبارات:
+
+```powershell
+python -m pytest -q
+```
+
+الاختبارات الحالية تغطي:
+
+1. CSV extraction
+2. REST API extraction
+3. SQLite extraction
+4. Duplicate handling
+5. Missing values
+6. Invalid records
+7. Source integration
+8. Transformation / derived features
+9. Final validation
+
+آخر تحقق أثناء إعداد النسخة:
+
+```text
+9 passed
+```
+
+---
 
 ## Outputs
 
-Required:
+### Required outputs
 
 ```text
 data/processed/final_dataset.csv
@@ -248,7 +524,7 @@ data/rejected/rejected_records.csv
 logs/pipeline.log
 ```
 
-Additional engineering outputs:
+### Additional engineering outputs
 
 ```text
 data/processed/student_ml_dataset.csv
@@ -257,137 +533,193 @@ reports/pipeline_run.md
 state/source_manifest.json
 ```
 
-## Pipeline metrics
+### Grain of each dataset
 
-The metrics report includes:
+`final_dataset.csv`:
 
-- total records
-- source record counts
-- integrated records
-- valid records
-- rejected records
-- duplicate records
-- missing values handled
-- rejection reasons
-- processing time
-- source fingerprints
-- incremental cache information
-
-## Online API deployment
-
-### Online deployment
-
-1. Push the repository to GitHub.
-2. Deploy the `api_service/` directory using the included `render.yaml` or `Dockerfile`.
-3. After deployment, copy the public HTTPS `/students` endpoint into `config.json`.
-4. Verify `/health` and `/docs`.
-
-`api_service/Dockerfile` is ready for container-based deployment.
-
-## Tests
-
-Run:
-
-```powershell
-pytest -q
+```text
+One row per Student × Course × Semester
 ```
 
-The tests cover:
+`student_ml_dataset.csv`:
 
-1. CSV loading
-2. API extraction
-3. SQLite extraction
-4. duplicate detection
-5. missing value handling
-6. rejection of invalid records
-7. source integration
-8. transformation
-9. final validation
+```text
+One row per Student
+```
 
-## Clean Code and engineering practices
+---
+
+## API Service
+
+الخدمة موجودة في:
+
+```text
+api_service/
+```
+
+وتستخدم FastAPI.
+
+Endpoints الرئيسية:
+
+```text
+/
+/health
+/students
+/students/{student_id}
+/meta
+/docs
+```
+
+الخدمة منشورة حاليًا على Vercel، والـPipeline يستخدم endpoint الإنتاج الموجود في `config.json`.
+
+---
+
+## Assignment Mapping
+
+| Requirement | Implementation |
+|---|---|
+| CSV Extraction | `app/sources/csv_source.py` |
+| REST API Extraction | `app/sources/api_source.py` |
+| SQLite Extraction | `app/sources/database_source.py` |
+| Validation | Source validators + `app/validation/quality.py` |
+| Cleaning | `app/transformation/cleaner.py` + source preparation |
+| Missing Values | Configured Median strategy |
+| Duplicates | Source-level duplicate detection |
+| Column Normalization | Source adapters |
+| Type Conversion | Source adapters |
+| Derived Columns | `app/transformation/transformer.py` |
+| Integration | `app/transformation/integration.py` |
+| Rejected Records | `data/rejected/rejected_records.csv` |
+| Final Load | `app/output/csv_writer.py` |
+| Logging | `app/utils/logger.py` |
+| Configuration | `config.json` |
+| Incremental Processing | SHA-256 fingerprints + caches |
+| Data Lineage | `source` + run metadata |
+| Metrics | `app/utils/metrics.py` |
+| Reusable Architecture | Source adapter modules |
+| Tests | `tests/` |
+
+---
+
+## Final Assignment Questions
+
+### 1. لماذا نحتاج إلى Data Pipeline متعددة المصادر؟
+
+لأن البيانات في الأنظمة الواقعية تكون موزعة بين ملفات وقواعد بيانات وواجهات APIs. الـPipeline يوفر مسارًا منظمًا لاستخراج البيانات والتحقق منها وتنظيفها ودمجها وتحويلها قبل استخدامها.
+
+### 2. ما الفرق بين Raw Data وProcessed Data؟
+
+Raw Data تمثل البيانات القادمة من المصدر قبل المعالجة. أما Processed Data فقد مرت بالتنظيف والتوحيد والتحقق والتحويل وأصبحت مناسبة للاستخدام downstream.
+
+### 3. ما المقصود بـ ETL؟
+
+Extract تعني استخراج البيانات، Transform تعني تغيير شكلها أو جودتها أو تمثيلها، وLoad تعني كتابة النتيجة في وجهة الاستخدام.
+
+### 4. ما مشكلات Integration الشائعة؟
+
+اختلاف هياكل البيانات، Missing Values، Duplicates، اختلاف النصوص، Invalid Values، ووجود IDs في مصدر وعدم وجودها في مصدر آخر.
+
+### 5. لماذا نستخدم Median في Missing Values؟
+
+لأن Median استراتيجية بسيطة وحتمية وأقل تأثرًا بالقيم المتطرفة من Mean في كثير من الحالات. في هذا المشروع هي الاستراتيجية المحددة في `config.json` للحقول الرقمية المعنية.
+
+### 6. كيف نتعامل مع Duplicates؟
+
+يتم اكتشاف التكرارات وفق قواعد المصدر، ويرفض السجل المكرر مع تسجيل السبب بدل السماح له بالدخول إلى النتيجة النهائية دون تفسير.
+
+### 7. ماذا نفعل مع Invalid Records؟
+
+يتم رفضها وتسجيل المصدر والسجل وسبب الرفض في `rejected_records.csv`، بدل تعديلها بشكل صامت.
+
+### 8. لماذا نفصل Extraction عن Transformation؟
+
+حتى تبقى مشاكل الاتصال والقراءة والتنسيق الخاصة بالمصدر منفصلة عن Business Rules. هذا يجعل إضافة Source جديد أسهل ويقلل الترابط بين المكونات.
+
+### 9. لماذا Final Validation مهمة؟
+
+للتأكد من أن Dataset الناتجة بعد الدمج والتنظيف والتحويل ما زالت تحقق قواعد الجودة المطلوبة قبل تحميلها للاستخدام النهائي.
+
+### 10. كيف يمكن تشغيل الـPipeline تلقائيًا؟
+
+يمكن تشغيله باستخدام Windows Task Scheduler أو cron أو CI/CD أو أدوات orchestration مثل Airflow بحسب بيئة التشغيل.
+
+### 11. كيف يمكن توسيعه لملايين السجلات؟
+
+من خلال Chunked Processing، Incremental Extraction، تنفيذ filtering وaggregation داخل قاعدة البيانات، التخزين المقسم، وتحسين الموارد بدل تحميل كل البيانات في الذاكرة دفعة واحدة.
+
+### 12. ما الفرق بين Batch Processing وStreaming؟
+
+Batch يعالج البيانات على دفعات في أوقات محددة أو عند trigger. Streaming يعالج الأحداث بشكل مستمر أو شبه لحظي عند وصولها.
+
+---
+
+## Verification Snapshot
+
+تم التحقق من النسخة الحالية باستخدام:
+
+```powershell
+python -m pytest -q
+python main.py --mode full
+python main.py
+```
+
+وكانت إحدى عمليات الـFull الأخيرة:
+
+```text
+CSV records             : 14
+API records             : 14
+Database records        : 21
+Integrated records      : 18
+Valid final records     : 18
+Rejected records        : 11
+Duplicate records       : 3
+Missing values handled  : 3
+Cross-source mismatches : 3
+Processing mode         : full
+```
+
+كما تم التحقق من Raw API snapshot وأنه:
+
+```text
+Valid JSON     : YES
+Records        : 14
+Contains NaN   : False
+Contains null  : True
+```
+
+---
+
+## Clean Code Principles
+
+المشروع مبني حول مبادئ:
 
 - Separation of Concerns
 - Single Responsibility
-- Explicit source adapters
-- Typed Python interfaces
-- Small testable functions
-- No business logic in `main.py`
-- Configuration outside the code
-- Structured logging
-- Rejected-record traceability
-- Source fingerprints and incremental mode
-- Reusable transformation functions
-- Deterministic outputs
-- SQL extraction separated from business transformation
+- Reusable Source Adapters
+- Typed Interfaces
+- Small Testable Functions
+- Configuration outside Business Logic
+- Structured Logging
+- Rejected-Record Traceability
+- Deterministic Outputs
+- Source Fingerprinting
 
-## How this maps to the assignment
+---
 
-| Assignment requirement | Implementation |
-|---|---|
-| CSV extraction | `app/sources/csv_source.py` |
-| REST API extraction | `app/sources/api_source.py` |
-| SQLite extraction | `app/sources/database_source.py` |
-| Validation | `app/validation/quality.py` + source validators |
-| Cleaning | `app/sources/*` validation/cleaning + `app/transformation/cleaner.py` |
-| Transformation | `app/transformation/transformer.py` |
-| Integration | `app/transformation/integration.py` |
-| Rejected data | `app/output/csv_writer.py` |
-| Load | `app/output/csv_writer.py` |
-| Logging | `app/utils/logger.py` |
-| Configuration | `config.json` |
-| Metrics | `app/utils/metrics.py` |
-| Incremental processing | `app/pipeline.py` source fingerprints |
-| Data lineage | `source` column + run metadata |
-| Reusable architecture | source adapter modules |
-| Tests | `tests/` |
-| Documentation | `README.md`, `README_AR.md`, `docs/` |
+## مشروع قابل للتطوير
 
-## Final assignment answers
+الهيكل الحالي يسمح لاحقًا بإضافة مصادر أو destinations جديدة دون إعادة كتابة الـPipeline بالكامل، مثل:
 
-### 1. Why do we need a data pipeline with multiple sources?
+```text
+New Source Adapter
+       ↓
+Existing Validation / Cleaning
+       ↓
+Existing Integration
+       ↓
+Existing Transformation
+       ↓
+Existing Output Layer
+```
 
-Because production data is usually distributed across files, APIs, and databases. A pipeline gives the project a controlled process for extracting, validating, cleaning, integrating, transforming, and loading that data.
-
-### 2. Raw vs Processed
-
-Raw data preserves what came from the source. Processed data has been cleaned, standardized, validated, and transformed for downstream use.
-
-### 3. Extract, Transform, Load
-
-Extract obtains data from source systems. Transform changes structure, quality, or business representation. Load writes the final dataset to its destination.
-
-### 4. Integration problems
-
-Typical issues include missing IDs, different text casing, duplicates, missing values, invalid ranges, and records that exist in one source but not another.
-
-### 5. Missing values
-
-The numeric fields use median imputation because the strategy is simple, deterministic, and less sensitive to extreme values than a mean. The strategy is documented in configuration.
-
-### 6. Duplicate records
-
-Exact duplicates and duplicate business keys are detected and rejected with an explicit reason.
-
-### 7. Invalid records
-
-Records violating business rules are separated into `rejected_records.csv` rather than silently being included in the final dataset.
-
-### 8. Why separate Extraction from Transformation?
-
-It isolates source-specific I/O concerns from business rules. A new source can be added without rewriting the transformation layer.
-
-### 9. Why is validation essential?
-
-A downstream model or report is only as reliable as the data it receives. Validation makes quality expectations explicit and prevents invalid records from silently entering the final dataset.
-
-### 10. How can the pipeline run automatically?
-
-It can be scheduled with Windows Task Scheduler, cron, CI/CD, or a workflow orchestrator such as Airflow.
-
-### 11. How can it handle millions of records?
-
-Use chunked reads, incremental extraction, database-side filtering/aggregation, partitioning, parallel processing where appropriate, and a scalable storage/compute platform.
-
-### 12. Batch vs Streaming
-
-Batch processing handles data in groups at scheduled or triggered intervals. Streaming processes events continuously or near-real-time as they arrive.
+وهذا يحافظ على فصل المسؤوليات ويجعل المشروع مناسبًا للتوسع التدريجي.

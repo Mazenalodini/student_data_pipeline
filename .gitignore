@@ -27,7 +27,7 @@ reports/*.md
 data/processed/*.csv
 data/rejected/*.csv
 data/raw/*.json
-
+data/raw/*.csv
 # Secrets / local env
 .env
 .env.*

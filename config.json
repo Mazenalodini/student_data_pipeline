@@ -8,7 +8,7 @@
       "path": "data/raw/students.csv"
     },
     "api": {
-      "url": "https://YOUR-DEPLOYED-API.example.com/students",
+      "url": "https://student-academic-profile-api.vercel.app/students",
       "timeout_seconds": 15,
       "max_retries": 3,
       "backoff_seconds": 1.0

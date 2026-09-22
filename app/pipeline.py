@@ -79,7 +79,13 @@ def _read_cache(
 
 
 def _write_api_raw_snapshot(dataframe: pd.DataFrame, output_file: Path) -> None:
-    write_json(dataframe.to_dict(orient="records"), output_file)
+    records = json.loads(
+        dataframe.to_json(
+            orient="records",
+            date_format="iso",
+        )
+    )
+    write_json(records, output_file)
 
 
 def _write_database_raw_snapshot(dataframe: pd.DataFrame, output_file: Path) -> None:
